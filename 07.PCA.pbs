@@ -1,0 +1,169 @@
+#!/bin/bash
+#PBS -q workq
+#PBS -N GWAS_PCA
+#PBS -V 
+#PBS -S /bin/bash 
+#PBS -l nodes=1:ppn=6
+#PBS -o GWAS_PCA.log
+#PBS -e GWAS_PCA.err
+
+#input 
+plink=/home/edizadehm/01.software/02.plink/plink
+input=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/SCZ_CC_3465_het_filtered
+indepSNP=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/SCZ_CC_3465_indepSNP.prune.in
+
+#outputs
+output_dir=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/
+base_name=SCZ_CC_PCA
+base=${output_dir}${base_name}
+duplicate_snps=${output_dir}duplicate_snps.txt
+input_dup_removed=${base}_dup_removed
+input_hapmap_only=${base}_hapmap_only
+input_hapmap_adj=${base}_hapmap_adj
+input_hapmap_frq=${base}_hapmap_frq
+input_hapmap_corrected=${base}_hapmap_corrected
+input_merge_ready=${base}_hapmap_merge_ready
+pruned_merged=${base}_pruned_hapmap_snps_merged_with_Onek
+racefile_own=${base}_recefile.txt
+merged_racefile=${base}_final_merged_recefile.txt
+oneK_panel=${output_dir}20100804.ALL.panel
+
+oneK_hapmap3=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/1kG_hapmap3_snps
+oneK_hapmap3_frq=${output_dir}1kG_hapmap3_snps_freq
+oneK_hapmap3_merge_ready=${output_dir}1kG_hapmap3_merge_ready
+all_differences=${output_dir}all_differences.txt
+racefile_1kG=${output_dir}racefile_1kG.txt
+
+
+#
+MDS_merged=/home/edizadehm/03.resources/03.SCZ_CC/01.scripts/MDS_merged.R
+
+date 
+
+#########################################################################################################
+
+#COMON PCA ANALYSIS
+
+#Remove the duplicate SNPs, unless we gonna get error
+awk '{print $2}' ${input}.bim | sort | uniq -d > $duplicate_snps
+$plink --bfile $input --exclude $duplicate_snps --allow-no-sex --make-bed --out $input_dup_removed
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+# Extract the variants present in 1000 Genomes dataset from the HapMap dataset.
+awk '{print$2}' ${oneK_hapmap3}.bim > ${oneK_hapmap3}ç
+$plink --bfile $input_dup_removed --extract ${oneK_hapmap3}_SNP_list.txt --allow-no-sex --recode --make-bed --out $input_hapmap_only
+# The datasets now contain the exact same variants.
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+## Merge your data and 1000 Genomes data sets
+
+# Prior to merging 1000 Genomes data with your GWAS data we want to make sure that the files are mergeable, for this we conduct 3 steps:
+# 1) Make sure the reference genome is similar in your data and the 1000 Genomes Project datasets.
+# 2) Resolve strand issues.
+# 3) Remove the SNPs which after the previous two steps still differ between datasets.
+
+# 1) set reference genome 
+awk '{print$2,$5}' ${oneK_hapmap3}.bim > ${oneK_hapmap3}_1kg_ref-list.txt
+$plink --bfile $input_hapmap_only --reference-allele ${oneK_hapmap3}_1kg_ref-list.txt --allow-no-sex --make-bed --out $input_hapmap_adj
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+# The 1kG_MDS7 and the HapMap-adj have the same reference genome for all SNPs.
+# This command will generate some warnings for impossible A1 allele assignment.
+
+# 2) Resolve strand issues.
+# Check for potential strand issues.
+# Extract allele frequencines too. 
+
+#extract pallindromic variants as well as allele frequencines and comapre them 
+#Since we are going to check allele frequencies: extract them with plink command:
+#I didn't get the purpose of this section!
+# $plink --bfile $oneK_hapmap3 --freq --out $oneK_hapmap3_frq
+# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+# $plink --bfile $input_hapmap_adj --freq --out $input_hapmap_frq
+# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+#compare script 
+awk '{print$2,$5,$6}' ${oneK_hapmap3}.bim > ${oneK_hapmap3}_tmp
+awk '{print$2,$5,$6}' ${input_hapmap_adj}.bim > ${input_hapmap_adj}_tmp
+sort ${oneK_hapmap3}_tmp ${input_hapmap_adj}_tmp | uniq -u > $all_differences
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+## Flip SNPs for resolving strand issues.
+# Print SNP-identifier and remove duplicates.
+awk '{print$1}' $all_differences | sort -u > ${all_differences}_flip_list.txt
+# Generates a file. These are the non-corresponding SNPs between the two files. 
+# Flip the  non-corresponding SNPs. 
+$plink --bfile $input_hapmap_adj --flip ${all_differences}_flip_list.txt --reference-allele ${oneK_hapmap3}_1kg_ref-list.txt --allow-no-sex --make-bed --out $input_hapmap_corrected
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+# Check for SNPs which are still problematic after they have been flipped.
+awk '{print$2,$5,$6}' ${input_hapmap_corrected}.bim > ${input_hapmap_corrected}_tmp
+sort ${oneK_hapmap3}_tmp ${input_hapmap_corrected}_tmp | uniq -u  > ${input_hapmap_corrected}_uncorresponding_SNPs.txt
+# This file demonstrates differences between the files.
+
+# 3) Remove problematic SNPs from Your data and 1000 Genomes.
+awk '{print$1}' ${input_hapmap_corrected}_uncorresponding_SNPs.txt | sort -u > ${input_hapmap_corrected}_SNPs_for_exlusion.txt
+# The command above generates a list of differences between your data and the 1000 Genomes data sets after flipping and setting of the reference genome.
+
+# Remove the problematic SNPs from both datasets.
+$plink --bfile $input_hapmap_corrected --exclude ${input_hapmap_corrected}_SNPs_for_exlusion.txt --allow-no-sex --make-bed --out $input_merge_ready
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+$plink --bfile $oneK_hapmap3 --exclude ${input_hapmap_corrected}_SNPs_for_exlusion.txt --allow-no-sex --make-bed --out $oneK_hapmap3_merge_ready
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+# Merge your data with 1000 Genomes Data.
+$plink --bfile $input_merge_ready --bmerge ${oneK_hapmap3_merge_ready}.bed ${oneK_hapmap3_merge_ready}.bim ${oneK_hapmap3_merge_ready}.fam --allow-no-sex --make-bed --out $pruned_merged
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+# Note, we are fully aware of the sample overlap between the HapMap and 1000 Genomes datasets. However, for the purpose of this tutorial this is not important.
+
+## Perform MDS on HapMap-CEU data anchored by 1000 Genomes data.
+# Using a set of pruned SNPs
+$plink --bfile $pruned_merged --extract $indepSNP --allow-no-sex --genome --out $pruned_merged
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+$plink --bfile $pruned_merged --read-genome ${pruned_merged}.genome --allow-no-sex --cluster --mds-plot 10 --out $pruned_merged
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+### MDS-plot
+# Create a racefile of your own data.
+awk '{print$1,$2,"OWN"}' ${input_merge_ready}.fam > $racefile_own
+
+# Concatenate racefiles.
+cat $racefile_1kG $racefile_own | sed -e '1i\FID IID race' > $merged_racefile
+
+
+# Generate population stratification plot.
+Rscript $MDS_merged $merged_racefile ${pruned_merged}.mds
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+exit
+# The output file MDS.pdf demonstrates that our �own� data falls within the European group of the 1000 genomes data. Therefore, we do not have to remove subjects.
+# For educational purposes however, we give scripts below to filter out population stratification outliers. Please execute the script below in order to generate the appropriate files for the next tutorial.
+
+## Exclude ethnic outliers.
+# Select individuals in HapMap data below cut-off thresholds. The cut-off levels are not fixed thresholds but have to be determined based on the visualization of the first two dimensions. To exclude ethnic outliers, the thresholds need to be set around the cluster of population of interest.
+
+
+
+# Extract these individuals in HapMap data.
+plink --bfile HapMap_3_r3_12 --keep EUR_MDS_merge2 --make-bed --out HapMap_3_r3_13
+# Note, since our HapMap data did include any ethnic outliers, no individuls were removed at this step. However, if our data would have included individuals outside of the thresholds we set, then these individuals would have been removed.
+
+## Create covariates based on MDS.
+# Perform an MDS ONLY on HapMap data without ethnic outliers. The values of the 10 MDS dimensions are subsequently used as covariates in the association analysis in the third tutorial.
+plink --bfile HapMap_3_r3_13 --extract indepSNP.prune.in --genome --out HapMap_3_r3_13
+plink --bfile HapMap_3_r3_13 --read-genome HapMap_3_r3_13.genome --cluster --mds-plot 10 --out HapMap_3_r3_13_mds
+
+# Change the format of the .mds file into a plink covariate file.
+awk '{print$1, $2, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13}' HapMap_3_r3_13_mds.mds > covar_mds.txt
+
+# The values in covar_mds.txt will be used as covariates, to adjust for remaining population stratification, in the third tutorial where we will perform a genome-wide association analysis.

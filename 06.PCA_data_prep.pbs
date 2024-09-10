@@ -1,0 +1,110 @@
+#!/bin/bash
+#PBS -q workq
+#PBS -N PCA_Prep
+#PBS -V 
+#PBS -S /bin/bash 
+#PBS -l nodes=1:ppn=6
+#PBS -o PCA_Prep.log
+#PBS -e PCA_Prep.err
+
+#input 
+plink=/home/edizadehm/01.software/02.plink/plink
+
+oneK_vcf=/home/edizadehm/02.tutorials/01.GWAS_tutorial/2_Population_stratification/ALL.2of4intersection.20100804.genotypes.vcf.gz
+oneK_genotypes=/home/edizadehm/02.tutorials/01.GWAS_tutorial/2_Population_stratification/ALL.2of4intersection.20100804.genotypes
+oneK_gen_no_missing=/home/edizadehm/02.tutorials/01.GWAS_tutorial/2_Population_stratification/ALL.2of4intersection.20100804.genotypes_no_missing_IDs
+hapmap3_snps=/home/edizadehm/03.resources/02.hapmap/02.hapmap3_snps/hapmap3_rs_only.txt
+
+#outputs
+output_dir=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/
+base_name=SCZ_CC_PCA
+base=${output_dir}${base_name}
+oneK_panel=${output_dir}20100804.ALL.panel
+oneK_mds=${output_dir}1kG_MDS
+oneK_mds2=${output_dir}1kG_MDS2
+oneK_mds3=${output_dir}1kG_MDS3
+oneK_mds4=${output_dir}1kG_MDS4
+oneK_rare=${output_dir}1kG_rare_snps
+oneK_hapmap3=${output_dir}1kG_hapmap3_snps
+racefile_1kG=${output_dir}racefile_1kG.txt
+
+date 
+
+## Download 1000 Genomes data ##
+# This file from the 1000 Genomes contains genetic data of 629 individuals from different ethnic backgrounds.
+# Note, this file is quite large (>60 gigabyte).  
+##wget ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20100804/ALL.2of4intersection.20100804.genotypes.vcf.gz
+
+# Convert vcf to Plink format.
+## $plink --vcf $oneK_vcf --make-bed --out $oneK_genotypes
+# Noteworthy, the file 'ALL.2of4intersection.20100804.genotypes.bim' contains SNPs without an rs-identifier, these SNPs are indicated with ".". This can also be observed in the file 'ALL.2of4intersection.20100804.genotypes.vcf.gz'. To check this file use this command: zmore ALL.2of4intersection.20100804.genotypes.vcf.gz .
+
+# However, for good practice, we will assign unique indentifiers to the SNPs with a missing rs-identifier (i.e., the SNPs with ".").
+## $plink --bfile $oneK_genotypes --set-missing-var-ids @:#[b37]\$1,\$2 --make-bed --out $oneK_gen_no_missing
+
+## QC on 1000 Genomes data.
+# Remove variants based on missing genotype data.
+$plink --bfile $oneK_gen_no_missing --geno 0.2 --allow-no-sex --make-bed --out $oneK_mds
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+# Remove individuals based on missing genotype data.
+$plink --bfile $oneK_mds --mind 0.2 --allow-no-sex --make-bed --out $oneK_mds2
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+# Remove variants based on missing genotype data.
+$plink --bfile $oneK_mds2 --geno 0.02 --allow-no-sex --make-bed --out $oneK_mds3
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+# Remove individuals based on missing genotype data.
+$plink --bfile $oneK_mds3 --mind 0.02 --allow-no-sex --make-bed --out $oneK_mds4
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+
+
+# Extract the variants present in HapMap dataset from the 1000 genomes dataset.
+$plink --bfile $oneK_mds4 --extract $hapmap3_snps --make-bed --out $oneK_hapmap3
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+#at this stage, we have created 1000 genome data for almost 1.2 milllion common variants in Hapmap project
+#this version of OneK will be used for General PCA analysis.
+#we would need rare variants from the OneK genome to calcualte PCA for rare variants.
+#Therefore, we gotta add RS number to each variant, and then filter the rare variants only
+#TODO
+# Remove variants based on MAF. 
+## Important Note: We need varaints below a certain cut-off. right now this cut-off is arbitary. 
+$plink --bfile $oneK_mds4 --max-maf 0.1 --allow-no-sex --make-bed --out $oneK_rare
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+
+# Filling the missing rs-identifiers in the 1000 Genomes data for rare variants.
+#WE will have rare variants necessary for rare PCA analysis
+
+#cleaning
+rm ${oneK_mds}* ${oneK_mds2}* ${oneK_mds2}* ${oneK_mds4}*
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+# At this stage we've got both rare and common variants necessary for PCA analysis. Next step will be 
+
+# Download the file with population information of the 1000 genomes dataset.
+# wget ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20100804/20100804.ALL.panel -O $oneK_panel
+# The file 20100804.ALL.panel contains population codes of the individuals of 1000 genomes.
+
+# Convert population codes into superpopulation codes (i.e., AFR,AMR,ASN, and EUR).
+awk '{print$1,$1,$2}' $oneK_panel > race_1kG.txt
+sed 's/JPT/ASN/g' race_1kG.txt > race_1kG2.txt
+sed 's/ASW/AFR/g' race_1kG2.txt > race_1kG3.txt
+sed 's/CEU/EUR/g' race_1kG3.txt > race_1kG4.txt
+sed 's/CHB/ASN/g' race_1kG4.txt > race_1kG5.txt
+sed 's/CHD/ASN/g' race_1kG5.txt > race_1kG6.txt
+sed 's/YRI/AFR/g' race_1kG6.txt > race_1kG7.txt
+sed 's/LWK/AFR/g' race_1kG7.txt > race_1kG8.txt
+sed 's/TSI/EUR/g' race_1kG8.txt > race_1kG9.txt
+sed 's/MXL/AMR/g' race_1kG9.txt > race_1kG10.txt
+sed 's/GBR/EUR/g' race_1kG10.txt > race_1kG11.txt
+sed 's/FIN/EUR/g' race_1kG11.txt > race_1kG12.txt
+sed 's/CHS/ASN/g' race_1kG12.txt > race_1kG13.txt
+sed 's/PUR/AMR/g' race_1kG13.txt > $racefile_1kG
+
+rm race_1kG*
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"

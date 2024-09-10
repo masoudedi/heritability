@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -q workq
+#PBS -N Convert_SCZ_CC
+#PBS -V 
+#PBS -S /bin/bash 
+#PBS -l nodes=1:ppn=6
+#PBS -o /home/edizadehm/02.tutorials/07.gcta/convert_vcfs.log
+#PBS -e /home/edizadehm/02.tutorials/07.gcta/convert_vcfs.err
+
+cd $PBS_O_WORKDIR
+
+date
+echo "chr1.imputed.filtered.bed chr1.imputed.filtered.bim chr1.imputed.filtered.fam" > merge_list.txt
+for i in {2..22}; do
+    echo "chr${i}.imputed.filtered.bed chr${i}.imputed.filtered.bim chr${i}.imputed.filtered.fam" >> merge_list.txt
+done
+
+/home/edizadehm/01.software/02.plink/plink --merge-list merge_list.txt --make-bed --out SCZ_CC_autosomes
+
+date

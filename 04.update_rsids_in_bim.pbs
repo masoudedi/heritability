@@ -1,0 +1,14 @@
+#!/bin/bash
+#PBS -q workq
+#PBS -N Convert_rs22
+#PBS -V 
+#PBS -S /bin/bash 
+#PBS -l nodes=1:ppn=6
+#PBS -o convert_vcfs_chr22.log
+#PBS -e convert_vcfs_chr22.err
+
+cd $PBS_O_WORKDIR
+
+date
+python3 04.update_rsids_in_bim.py
+date
