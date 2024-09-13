@@ -39,8 +39,8 @@ output=${base}.final
 #multigeno file: include all of the geno files pathes.
 
 #make grm
-bgen=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/SCZ_CC_chr.gen
-sample=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/SCZ_CC_chr.sample
+bgen=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/test.bgen
+sample=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/test.sample
 $gcta --bgen  $bgen --sample $sample --autosome --maf 0.01 --make-grm --out $grm --thread-num 10
 echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n" 
 
