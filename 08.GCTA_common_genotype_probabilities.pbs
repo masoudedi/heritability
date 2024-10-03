@@ -12,6 +12,7 @@ plink=/home/edizadehm/01.software/02.plink/plink
 gcta=/home/edizadehm/02.tutorials/07.gcta/gcta-1.94.1-linux-kernel-3-x86_64/gcta64
 input=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/scz_cc_genos.list
 hapmap3_snps=/home/edizadehm/03.resources/02.hapmap/02.hapmap3_snps/hapmap3_rs_only.txt
+hampmap3_chrom_pos_ref_alt=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/hapmap3_chrm_pos_ref_alt2.txt
 #outputs
 output_dir=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/
 base_name=SCZ_CC_GCTA_common
@@ -39,22 +40,24 @@ output=${base}.final
 #multigeno file: include all of the geno files pathes.
 
 #make grm
-bgen=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/test.bgen
-sample=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/test.sample
-$gcta --bgen  $bgen --sample $sample --autosome --maf 0.01 --make-grm --out $grm --thread-num 10
+# bgen=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/test.bgen
+mbgen=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/scz_cc_multiple_bgen1.txt
+sample='/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr1.sample'
+uniq_sample=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/final_samples.txt
+$gcta --mbgen $mbgen  --sample  $sample --autosome --maf 0.0007 --keep $uniq_sample --extract $hampmap3_chrom_pos_ref_alt --geno 0.02 --make-grm --out $grm --thread-num 10
 echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n" 
 
 # #removing cryptic relatedness 
-# $gcta --grm $grm --grm-cutoff 0.05  --make-grm  --out $grm_filtered
-# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+$gcta --grm $grm --grm-cutoff 0.05  --make-grm  --out $grm_filtered
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 
-# $gcta  --grm $grm_filtered --keep ${grm_filtered}.grm.id --extract $hapmap3_snps --pca 20  --out $pca_20
-# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+$gcta  --grm $grm_filtered --keep ${grm_filtered}.grm.id --maf 0.01 --pca 20 --out $pca_20
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 
 # #Creating Phen files from the 
 # #For a case-control study, the phenotypic values of cases and controls should be specified as 1 and 0, respectively. Suppose you have prepared a phenotype file test_cc.phen. 
-# cat ${input}.fam | awk '{if ($6 == 1) $6 = 0; else if ($6 == 2) $6 = 1; print $1, $2, $6}' > $phen
-# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+cat ${input}.fam | awk '{if ($6 == 1) $6 = 0; else if ($6 == 2) $6 = 1; print $1, $2, $6}' > $phen
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 # # GREML
-# $gcta --grm $grm_filtered --qcovar ${pca_20}.eigenvec --pheno $phen --reml --prevalence 0.01 --out $output --thread-num 10
-# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+$gcta --grm $grm_filtered --qcovar ${pca_20}.eigenvec --pheno $phen --reml --prevalence 0.01 --out $output --thread-num 10
+echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"

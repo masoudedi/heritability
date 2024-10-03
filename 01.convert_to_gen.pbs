@@ -27,13 +27,14 @@ date
 # done
 scl enable devtoolset-11 bash # it loads gcc version 11
 
-for i in {10..22}
+# for i in {10..22}
+# do
+# /home/edizadehm/01.software/05.qctool/qctool/build/release/apps/qctool_v2.2.0 \
+#     -g /home/projects/IrishGWAS/SCZ_CC/Post_all_QC/HRC_version_r.1.1/vcfs/chr${i}.dose_filtered.vcf.gz \
+#     -og /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.bgen
+# done
+
+for i in {1..9}
 do
-/home/edizadehm/01.software/05.qctool/qctool/build/release/apps/qctool_v2.2.0 \
-    -g /home/projects/IrishGWAS/SCZ_CC/Post_all_QC/HRC_version_r.1.1/vcfs/chr${i}.dose_filtered.vcf.gz \
-    -og /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.bgen
-done
-
-
-# bgenix -g /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/HRC.r.1.1.chr22.gen.gz -index
-# bgenix -g /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/SCZ_CC_chr22.gen -index
+/home/edizadehm/01.software/bgenix -g /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.bgen -index
+done 

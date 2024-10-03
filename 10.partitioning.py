@@ -10,11 +10,12 @@ median_snp = df['ldscore_SNP'].median()
 
 # Calculate median
 median_region = df['ldscore_region'].median()
+
 def select_high_ld(row, median_snp, median_region):
     if row['ldscore_SNP'] > median_snp:
         return True 
-    elif row['ldscore_region'] > median_region:
-        return True 
+    # elif row['ldscore_region'] > median_region:
+    #     return True 
     return False 
 df['is_high_ld'] = df.apply(select_high_ld, axis=1, args=(median_snp, median_region))
 

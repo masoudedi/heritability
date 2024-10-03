@@ -4,21 +4,22 @@
 #PBS -V 
 #PBS -S /bin/bash 
 #PBS -l nodes=1:ppn=10
-#PBS -o GREML_part6.log
-#PBS -e GREML_part6.err
+#PBS -o GREML_part10.log
+#PBS -e GREML_part10.err
 
 #input 
 plink=/home/edizadehm/01.software/02.plink/plink
 gcta=/home/edizadehm/02.tutorials/07.gcta/gcta-1.94.1-linux-kernel-3-x86_64/gcta64
 input=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/SCZ_CC_3465_het_filtered
-r_part=/home/edizadehm/03.resources/03.SCZ_CC/01.scripts/10.partitioning.R
-py_part=/home/edizadehm/03.resources/03.SCZ_CC/01.scripts/10.partitioning.py
+r_part=/home/edizadehm/01.scripts/10.partitioning.R
+py_part=/home/edizadehm/01.scripts/10.partitioning.py
 hapmap3_snps=/home/edizadehm/03.resources/02.hapmap/02.hapmap3_snps/hapmap3_rs_only.txt
-thread=10
+thread=30
 #outputs
 output_dir=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/
 base_name=SCZ_CC_GCTA_part
 duplicate_snps=${output_dir}duplicate_snps.txt
+uniq_sample=${output_dir}final_samples.txt
 base=${output_dir}${base_name}
 input_dup_removed=${base}_dup_removed
 ldscore=${base}_2
@@ -32,53 +33,80 @@ multiple_grm=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/multiple_grm.txt
 greml=${base}.result
 
 
+#I've already done QC steps on SCZ_CC cohort, and excluded some variants and samples.
+#before analysis, I am going to exclude samples and variants that did not pass the QC
+#and make GRM acordingly. 
+awk '{print $1,$2}' ${input_dup_removed}.fam > $uniq_sample
 #Remove the duplicate SNPs, unless we gonna get error
+# awk '{print $1":"$4":"$5":"$6}' ${input_dup_removed}.bim > $duplicate_snps
 # awk '{print $2}' ${input}.bim | sort | uniq -d > $duplicate_snps
 # $plink --bfile $input --exclude $duplicate_snps --allow-no-sex --make-bed --out $input_dup_removed
 # echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 
 # make grm
-allele_freq=$(echo "scale=10; 5/(3465 * 2)" | bc)
+mbgen=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/scz_cc_multiple_bgen1.txt
+sample='/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr1.sample'
+# $gcta --mbgen $mbgen --sample $sample --autosome --maf 0.0007 --geno 0.02 --keep $uniq_sample --make-grm --out $grm_base --thread-num 15
 #calcualted according to the paper: 5 Allele counts: 5 / n * 2. n is sample size
-# $gcta --bfile $input_dup_removed --autosome --maf 0.0007 --make-grm --out $grm_base --thread-num 10 
+
 echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 #removing cryptic relatedness 
 #remove one of each pair of individuals with estimated genetic relatedness > 0.05, According to the paper.
 # $gcta --grm $grm_base --grm-cutoff 0.05  --make-grm  --out $grm_filtered
 #these are the final family and individuals that are going to be included in the study.
-echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 
 #Run GREML for entire grm, common and rare together
-$gcta --reml --reml-alg 0 --grm $grm_filtered --qcovar $pca20 --pheno $phen --prevalence 0.01 --out ${greml}_all --thread-num $thread --reml-maxit 10000
+# $gcta --reml --reml-alg 0 --grm $grm_filtered --qcovar $pca20 --pheno $phen --prevalence 0.01 --out ${greml}_all --thread-num $thread --reml-maxit 10000
 
 #in GREML we'll need quantitative covariants, therfore, we are going to calcualte PCA for our samples.
 #The PCA must be acording to HapMao snps and includes 20 PCAs as covariates later in the analysis.
 # Input the GRM file and output the first 20 eigenvectors for a subset of individuals
 # $gcta --grm $grm_filtered --keep ${grm_filtered}.grm.id --extract $hapmap3_snps --pca 20  --out $pca_20
-echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 
 #calculate LD score
 # --ld-score-region 200
 #The default value is 200Kb, i.e. the length of the segment is 200Kb (with 100Kb overlap between two adjacent segments). Results are save a *.score.ld file.
 #In the paper, the used 10MB for ld_score window.
-# $gcta --bfile $input_dup_removed  --keep ${grm_filtered}.grm.id --ld-score-region 10000 --out $ldscore --thread-num $thread
+#LD score calcualtions need bed file instead of bgen. Therefore, I am going to convert it to
+#plink bed again
+
+# for i in {1..22}; do 
+#     plink2 --bgen /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.bgen ref-first \
+#         --sample /home/projects/IrishGWAS/SCZ_CC/Post_all_QC/HRC_version_r.1.1/genos/HRC.r.1.1.chr${i}.samples \
+#         --make-bed --out /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}
+# done 
+
+# echo "/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr1.bed /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr1.bim /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr1.fam" > merge_list.txt
+# for i in {2..22}; do
+#     echo "/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.bed /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.bim /home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/chr${i}.fam" >> merge_list.txt
+# done
+
+# reeees=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/genos/scz_cc
+# $plink --merge-list merge_list.txt --make-bed --out $reeees
+
+# date
+
+# $gcta --bfile $reeees --ld-score-region 10000 --out $ldscore --thread-num $thread
 
 # partitio  by LD
 ld_out=${ldscore}.score.ld
 # Rscript $r_part $ld_out
-# python3 $py_part $ld_out
+python3 $py_part $ld_out
 
-# #Making GRM for each LD group and further stratify by MAF
-$gcta --bfile $input_dup_removed  --keep ${grm_filtered}.grm.id --extract ${ld_out}.high_ld.txt --maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.high_common
+# #Making GRM for each LD group and further stratify by MAF --geno 0.02 --maf 0.0007
+$gcta --mbgen $mbgen --sample $sample --autosome --keep ${grm_filtered}.grm.id --extract ${ld_out}.high_ld.txt --maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.high_common
 echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
-$gcta --bfile $input_dup_removed  --keep ${grm_filtered}.grm.id --extract ${ld_out}.high_ld.txt --max-maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.high_rare
-echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
+$gcta --mbgen $mbgen --sample $sample --autosome --keep ${grm_filtered}.grm.id --extract ${ld_out}.high_ld.txt  --max-maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.high_rare
+# echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
 # # #g2
-$gcta --bfile $input_dup_removed  --keep ${grm_filtered}.grm.id --extract ${ld_out}.low_ld.txt --maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.low_common
+$gcta --mbgen $mbgen --sample $sample --autosome --keep ${grm_filtered}.grm.id --extract ${ld_out}.low_ld.txt --maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.low_common
 echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
-$gcta --bfile $input_dup_removed  --keep ${grm_filtered}.grm.id --extract ${ld_out}.low_ld.txt --max-maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.low_rare
+$gcta --mbgen $mbgen --sample $sample --autosome --keep ${grm_filtered}.grm.id --extract ${ld_out}.low_ld.txt  --max-maf 0.01 --thread-num $thread --make-grm --out ${grm_base}.low_rare
 echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n\n"
-# # #g3
+
+# # # #g3
 # $gcta --bfile $input --extract ${ld_out}.snp_group3.txt --maf 0.1 --thread-num $thread --make-grm --out ${grm_base}.g3_maf_mt_0.1
 # $gcta --bfile $input --extract ${ld_out}.snp_group3.txt --max-maf 0.1 --thread-num $thread --make-grm --out ${grm_base}.g3_maf_lt_0.1
 # # #g4
@@ -110,4 +138,4 @@ echo -e "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # and LD bins as 8 random-effect components (Figure 1).
 
 multiple_grm=/home/edizadehm/03.resources/03.SCZ_CC/03.staging/multi_grm.txt
-# $gcta --reml --reml-alg 2 --mgrm $multiple_grm --pheno $phen --prevalence 0.01 --out $greml --thread-num $thread --reml-maxit 10000
+$gcta --reml --reml-alg 0 --mgrm $multiple_grm --pheno $phen --prevalence 0.01 --out $greml --thread-num $thread --reml-maxit 10000

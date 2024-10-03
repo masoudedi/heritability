@@ -1,0 +1,27 @@
+#!/bin/bash
+#PBS -q workq
+#PBS -N R2_.9_17
+#PBS -V 
+#PBS -S /bin/bash 
+#PBS -l nodes=1:ppn=6
+#PBS -o filter_.9_17.log
+#PBS -e filter_.9_17.err
+
+cd $PBS_O_WORKDIR
+
+date
+cutoff=0.9
+i=17
+output=/home/edizadehm/03.resources/03.SCZ_CC/02.original_SCZ_CC_data/01.Dosages
+input=/home/projects/IrishGWAS/SCZ_CC/Post_all_QC/HRC_version_r.1.1/vcfs
+
+# Retained
+bcftools view -i "R2 > $cutoff" -Oz ${input}/chr$i.dose.vcf.gz > ${output}/chr$i.dose_${cutoff}_retained.vcf.gz
+bcftools query -f '%ID\t%INFO/AF\t%INFO/MAF\t%INFO/IMPUTED\n' ${output}/chr$i.dose_${cutoff}_retained.vcf.gz > ${output}/chr$i.dose_${cutoff}_retained.txt
+
+# Excluded
+bcftools view -i "R2 <= $cutoff" -Oz ${input}/chr$i.dose.vcf.gz > ${output}/chr$i.dose_${cutoff}_excluded.vcf.gz
+bcftools query -f '%ID\t%INFO/AF\t%INFO/MAF\t%INFO/IMPUTED\n' ${output}/chr$i.dose_${cutoff}_excluded.vcf.gz > ${output}/chr$i.dose_${cutoff}_excluded.txt
+
+date
+
